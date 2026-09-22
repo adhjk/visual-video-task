@@ -1,4 +1,4 @@
-#ifndef AppVersion
+﻿#ifndef AppVersion
   #error AppVersion required
 #endif
 #ifndef SourceDir
@@ -43,6 +43,7 @@ Name: "{autodesktop}\视频EEG总范式"; Filename: "{app}\VisualVideoTask.exe";
 Name: "{autoprograms}\视频EEG文件盘点"; Filename: "{app}\VisualVideoTask.exe"; Parameters: --audit
 Name: "{autoprograms}\视频EEG归档缓存"; Filename: "{app}\VisualVideoTask.exe"; Parameters: --archive-caches
 Name: "{autoprograms}\视频EEG检查硬盘占用"; Filename: "{app}\VisualVideoTask.exe"; Parameters: --drive-report
+Name: "{autoprograms}\视频EEG导出与检查BIDS"; Filename: "{app}\VisualVideoTask.exe"; Parameters: --bids-export
 [Run]
 Filename: "{app}\VisualVideoTask.exe"; Description: 启动视频EEG总范式; Flags: nowait postinstall skipifsilent
 [Code]

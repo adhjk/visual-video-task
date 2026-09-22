@@ -24,6 +24,9 @@ dependencies = [
   "zeroconf",
 ]
 
+[project.optional-dependencies]
+bids = ["bids-validator-deno==3.0.1", "deno==2.9.6"]
+
 [project.scripts]
 video-eeg = "video_eeg.experiment.video_runner:main"
 

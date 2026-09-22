@@ -17,3 +17,10 @@
 - Windows EXE 1.0.1 uses verified local config snapshots and data copies under Desktop/video/data/sourcedata; original records remain untouched. Desktop migration may resume these copied states locally, preserving protocol hashes. Never infer that unused legacy code, environments, metadata, or unknown files are disposable.
 
 - 2026-09-19 explicit authorization: v2 excludes original:vid_6076 (20), original:vid_2693 (24), original:vid_6241 (33). Preserve immutable base manifest/hash and v1/shared media; effective manifest has 11,084 rows. Backup state before exclusion, preserve attempts/completions/answers and audit necessary unanswered-question rebindings. Completed Sessions remain historical. This is the specific exception to membership preservation above.
+
+## Windows 1.0.4 BIDS export
+
+- Native recording/behavior/state remain the recovery contract. BIDS is an independent post-save copy; never substitute it for session_state or overwrite source records.
+- Exporter video_eeg/utils/bids_export.py uses the lab-confirmed BrainCo 31 EEG + first counter row, uV, IO profile; do not reuse device assumptions for another device. Preserve protocol/part identity, behavior fields and missing-EEG timing flags.
+- Offline official validator must be bundled with Deno; validate all TSV rows, without network. Passing BIDS structure validation does not certify signal quality or real hardware.
+- README and docs/operations/BIDS_EXPORT.md describe automatic export, manual retry, old records and source/BIDS directory boundaries.

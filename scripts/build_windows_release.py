@@ -39,6 +39,17 @@ def main():
     if not args.reuse_runtime:
         shutil.copytree(packages,target/'runtime/Lib/site-packages',dirs_exist_ok=True,
             ignore=lambda folder,names:[n for n in names if n=='__pycache__' or n=='direct_url.json' or n.endswith(('.pyc','.pyo'))])
+    # Ship official validator JS + its Deno binary locally; validation needs no network/Node.
+    import importlib.metadata
+    from deno import find_deno_bin
+    for package, distribution in (('bids_validator_deno','bids-validator-deno'),('deno','deno')):
+        shutil.copytree(packages/package,target/'runtime/Lib/site-packages'/package,dirs_exist_ok=True,
+            ignore=lambda folder,names:[n for n in names if n=='__pycache__' or n.endswith('.pyc')])
+        dist=importlib.metadata.distribution(distribution)
+        dist_path=Path(dist._path)
+        shutil.copytree(dist_path,target/'runtime/Lib/site-packages'/dist_path.name,dirs_exist_ok=True)
+    (target/'runtime/Scripts').mkdir(exist_ok=True)
+    shutil.copy2(find_deno_bin(),target/'runtime/Scripts/deno.exe')
     for name in ('share','tcl'):
         folder=Path(sys.prefix)/name
         if folder.is_dir() and not args.reuse_runtime:shutil.copytree(folder,target/'runtime'/name,dirs_exist_ok=True)

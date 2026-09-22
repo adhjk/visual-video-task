@@ -4,11 +4,13 @@
 
 本仓库提供Windows实验室电脑使用的PsychoPy视频EEG程序。
 
-**实验室安装版：[下载 Windows EXE 1.0.3](https://github.com/18yiba/visual-video-task/releases/download/desktop-v1.0.3/VisualVideoTask-Setup-Windows-x64.exe)** · [发布说明与 SHA256](https://github.com/18yiba/visual-video-task/releases/tag/desktop-v1.0.3)
+**实验室安装版：[下载 Windows EXE 1.0.4](https://github.com/18yiba/visual-video-task/releases/download/desktop-v1.0.4/VisualVideoTask-Setup-Windows-x64.exe)** · [发布说明与 SHA256](https://github.com/18yiba/visual-video-task/releases/tag/desktop-v1.0.4)
 
 适用于 Windows 10/11 x64，自带 Python 和依赖。下载安装包可联网，日常采集离线；视频通过移动硬盘复制到实验室本机。正式采集仍需设备及对应驱动；离线不意味着关闭 EEG 设备必需的局域网。
 
 1.0.1 修复材料路径误指上级目录、运行依赖外置盘以及数据写回外置盘的问题。当前 v1/v2 均保留视频内容选择题；已停用的算术判断题不会进入新版桌面流程。题库、固定分组和已保存答案不因迁移而重建或转换。
+
+**1.0.4 新增离线 EEG-BIDS 保存：原始记录和进度照常保留，正式采集结束后另生成 BrainVision + events/channels/JSON 副本；开始菜单“视频EEG导出与检查BIDS”可转换旧记录并离线校验。**[主试逐步操作、文件解释与报错处理](docs/operations/BIDS_EXPORT.md)。已有材料和Session分配不变。
 
 ## 目录导航
 
@@ -17,6 +19,7 @@
 - [版本选择：我应该选哪一个](#版本选择我应该选哪一个)
 - [每个目录和根目录文件有什么用](#每个目录和根目录文件有什么用)
 - [视频下载、复制和路径配置](#视频下载复制和路径配置)
+- [BIDS保存、旧数据导出与检查](docs/operations/BIDS_EXPORT.md)
 - [统一数据路径及旧被试续跑](#统一数据路径及旧被试续跑)
 - [实验流程与全部按键](#实验流程与全部按键)
 - [设备配置及完整YAML](#设备配置及完整yaml)
@@ -26,7 +29,7 @@
 
 ## 实验室安装版：安装、迁移和拔盘
 
-### 已安装1.0.1/1.0.2：最小更新到1.0.3
+### 已安装1.0.1–1.0.3：最小更新到1.0.4
 
 **保存退出 → 确认被试数据已有备份 → 将新版EXE复制到本机并安装 → 原入口、v2、原编号、原Session续跑。**不用卸载、重装Python、重新迁移或重拷视频库。先由主试用独立测试编号检查真实设备、评分与保存位置；采集中不要安装。
 
@@ -246,7 +249,7 @@ data/sourcedata/
   demo/<协议>/<测试编号>/run_.../session_01/...
 ```
 
-虽然都在sourcedata之下，仍保留版本目录：v1、v2的Session成员和行为任务不同，不能混在同一被试状态里。这里是原始采集资料目录，不表示已经转换为BIDS。源码只有空目录占位，不含本机已有数据。
+虽然都在sourcedata之下，仍保留版本目录：v1、v2的Session成员和行为任务不同，不能混在同一被试状态里。这里是原始采集资料目录；1.0.4会另在同级`data/bids/v1`或`data/bids/v2`生成BIDS副本，详见[BIDS说明](docs/operations/BIDS_EXPORT.md)。不要把整个sourcedata拿去当BIDS校验，也不要用BIDS副本替换续跑进度。源码只有空目录占位，不含本机已有数据。
 
 ### 原来的complete等目录怎么办
 
@@ -545,7 +548,7 @@ demo_mode: false
 
 ## 实验室硬盘更新
 
-本次推荐使用上方 Windows EXE 1.0.3；安装和首次迁移结束后，日常采集无需连接交付硬盘。已有 v1 继续选择 v1，不因安装总范式而改成 v2；只有研究安排明确需要 v2 时才用新协议和相应被试记录。
+本次推荐使用上方 Windows EXE 1.0.4；安装和首次迁移结束后，日常采集无需连接交付硬盘。已有 v1 继续选择 v1，不因安装总范式而改成 v2；只有研究安排明确需要 v2 时才用新协议和相应被试记录。
 
 已发出的旧离线包及断流补丁仍按包内入口和配置工作，没有被新版自动改写。继续使用这些历史入口时，应保留原环境、固定清单、题库和完整记录；不要为了统一文件名删除旧 BAT。原补丁及回退机制见[数据与 EEG 恢复](docs/operations/EEG_AND_RECOVERY.md)，历史源码包的部署见[硬盘部署说明](docs/operations/OFFLINE_UPDATE.md)。这些不是安装 EXE 的额外步骤。
 
@@ -553,6 +556,8 @@ demo_mode: false
 
 | 你看到的情况 | 现在按什么顺序做 | 什么时候可以继续 |
 |---|---|---|
+| 原始数据已保存，但提示 **BIDS导出未完成** | ①不要删除数据或重做实验。②记下原因。③确认本机空间足够，打开开始菜单“视频EEG导出与检查BIDS”，选原协议与已保存的被试/Session重试。详见[BIDS故障表](docs/operations/BIDS_EXPORT.md#检查结果怎么处理) | 原始NPY、行为表和续跑进度照常保留；BIDS失败不等于采集没保存 |
+| BIDS校验 **0个错误、有警告** | ①打开BIDS目录的code/validation_report.json。②作者、许可、设备型号/电极位置等推荐项据实补充。③查看code/exports中的质量标记，不能忽略断流 | 格式通过与信号质量是两件事，不以转换成功判断所有数据有效 |
 | **视频看完后报“视频未能完整解码”**，尤其Session3的neutral_neutral_0833_00000235.mp4 | ①按空格退出，等“数据已保存”后关闭。②备份整个被试目录。③把**1.0.3安装包复制到电脑本机**后更新，不用卸载/重迁移。④原编号、v2、原Session续跑。具体已修文件见[片尾清单](docs/operations/VIDEO_EOF_AUDIT.md) | 主试先独立测试能正常到评分页，再恢复被试采集；不要反复用被试排查 |
 | **Session20/24/33提示材料已知不完整**，文件分别为6076/2693/6241.mp4 | ①保存退出并确认备份。②关闭程序后安装1.0.3。③原编号、v2、原Session续跑。新版自动排除三条；不用手删MP4或进度，不用重下旧材料包 | 主试独立验证后恢复；若1.0.3仍提示这三条，核对EXE版本并保留日志 |
 | 更新1.0.3后，**其他文件仍报解码错误** | ①保存退出，记下视频文件名、Session和程序版本。②保留本次时间戳目录中的crash_report.txt及Session目录的trial_log.csv。③按下文核对SHA256并提交日志 | 查清具体文件与解码结果后继续；不要删除片段、转码截短或改完成标记 |

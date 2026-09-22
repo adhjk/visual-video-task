@@ -10,3 +10,5 @@ real stimulus videos, participant recordings, credentials or a prebuilt Python e
 
 The data-quality discussion references [Omni-Intel/oi-eegqc](https://github.com/Omni-Intel/oi-eegqc).
 No oi-eegqc scoring code is embedded or automatically run by this experiment.
+
+Windows 1.0.4 additionally bundles BIDS Validator 3.0.1 (MIT; https://github.com/bids-standard/bids-validator) and Deno 2.9.6 (MIT; https://github.com/denoland/deno) for offline format validation. Package license files are included in the runtime distribution metadata. The validator receives no network permission. The paradigm-specific BrainVision exporter is in video_eeg/utils/bids_export.py; it does not depend on MNE at acquisition time.

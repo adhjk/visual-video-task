@@ -98,9 +98,58 @@ def verify_materials(settings,protocol):
     save_json(cache_path,cache);save_json(USER/'settings.json',settings)
     return True
 
+def export_bids_dialog(settings):
+    """Independent offline export; acquisition must have finished and saved."""
+    from concurrent.futures import ThreadPoolExecutor
+    from video_eeg.utils.bids_export import discover, export_recording, validate_dataset, write_json
+    from video_eeg.utils.desktop_local import desktop_root, require_local
+    from video_eeg.utils.desktop import assert_legacy_idle
+    W=qt()
+    default=Path(settings.get('data_root',str(desktop_root()/'data/sourcedata')))
+    protocol,ok=W.QInputDialog.getItem(None,'导出 BIDS','请选择原记录所属协议（v1、v2分别导出；请先结束并保存采集）：',['v2','v1'],0,False)
+    if not ok:return 0
+    source=W.QFileDialog.getExistingDirectory(None,'选择一个已保存的Session、被试或协议目录（不要选Demo）',str(default/protocol))
+    if not source:return 0
+    assert_legacy_idle(settings.get('legacy_source') or source)
+    target=str(default.parent/'bids'/protocol)
+    target,ok=W.QInputDialog.getText(None,'BIDS副本位置','保留原始数据及进度；同一协议使用同一目录。需要额外约一份EEG的空间。',text=target)
+    if not ok or not target.strip():return 0
+    require_local(target)
+    progress=W.QProgressDialog('正在导出并逐行校验BIDS；原数据和进度不变。',None,0,0)
+    progress.setWindowTitle('导出 BIDS');progress.setMinimumDuration(0);progress.show()
+    def work():
+        folders=discover(source)
+        if not folders:raise ValueError('没有找到含metadata.json的已保存采集目录。')
+        results=[];errors=[]
+        for folder in folders:
+            try:results.append(export_recording(folder,target,protocol=protocol))
+            except Exception as exc:errors.append({'recording':folder.name,'error':str(exc)})
+        validation=None
+        if results:
+            try:validation=validate_dataset(target)
+            except Exception as exc:errors.append({'validation_error':str(exc)})
+        report={'results':results,'errors':errors,'validation':validation}
+        # Reports remain local; contain no EEG and are never uploaded.
+        report_path=USER/'logs'/('bids_export_'+time.strftime('%Y%m%d_%H%M%S')+'.json')
+        write_json(report_path,report)
+        flags=sum(len(r.get('quality_flags',[])) for result in results for r in result['recordings'])
+        return results,errors,validation,flags,report_path
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future=pool.submit(work)
+            while not future.done():W.QApplication.processEvents();time.sleep(.05)
+            results,errors,validation,flags,report_path=future.result()
+    finally:progress.close()
+    message='原始记录与续跑进度未改变。\nBIDS目录：'+target+'\n操作报告：'+str(report_path)
+    if validation:message+=f"\n官方校验：{validation['errors']}个错误、{validation['warnings']}个警告。"
+    if flags:message+=f'\n有{flags}项时序质量标记，请查看code/exports；格式通过不代表EEG完整。'
+    if errors:W.QMessageBox.warning(None,'部分导出未完成',message+'\n'+str(errors[0]))
+    else:W.QMessageBox.information(None,'BIDS导出完成',message)
+    return 1 if errors else 0
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--self-test',action='store_true');p.add_argument('--smoke',choices=['v1','v2','disconnect']);p.add_argument('--settings',action='store_true')
-    p.add_argument('--audit',action='store_true');p.add_argument('--archive-caches',action='store_true');p.add_argument('--drive-report',nargs='?',const='ASK')
+    p.add_argument('--bids-export',action='store_true');p.add_argument('--audit',action='store_true');p.add_argument('--archive-caches',action='store_true');p.add_argument('--drive-report',nargs='?',const='ASK')
     args=p.parse_args()
     USER.mkdir(parents=True,exist_ok=True)
     for name in ('logs','tmp','psychopy'):(USER/name).mkdir(exist_ok=True)
@@ -136,6 +185,7 @@ def main():
     from video_eeg.utils.recording_paths import recording_root
     import launch_experiment as launcher
     settings=load_settings()
+    if args.bids_export:return export_bids_dialog(settings)
     if (args.settings or settings.get('schema')!=SCHEMA) and not choose_binding(settings):return 0
     validate_runtime(settings,USER,ROOT)
     if args.audit or args.archive_caches:

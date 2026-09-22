@@ -6,6 +6,8 @@ dependencies = []
 
 [project.optional-dependencies]
 runtime = [
+  "bids-validator-deno==3.0.1",
+  "deno==2.9.6",
   "arabic-reshaper==3.0.1",
   "astunparse==1.6.3",
   "bcigo-sdk==1.0.2",

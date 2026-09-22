@@ -1196,11 +1196,18 @@ class VideoRunner:
             if session_dir is not None:
                 if self._run_traceback:
                     (session_dir / "crash_report.txt").write_text(self._run_traceback, encoding="utf-8")
+                self._show_text("原始记录已保存，正在整理 BIDS 副本。\n请等待完成后再关闭程序。", wait_for_key=False, duration=0, allow_abort=False)
+                try:
+                    from video_eeg.utils.bids_export import after_recording
+                    bids_message = after_recording(session_dir, self.config)
+                except Exception as exc:
+                    bids_message = "原始记录已保存；BIDS导出未完成，可稍后重试。\n"+str(exc)
+                print(bids_message, flush=True)
                 if getattr(self, '_eeg_failure', None) is not None:
                     print(f'EEG故障数据已保存：{session_dir}')
-                    self._show_text(failure_message(self._eeg_failure)+f'\n\n已保存本次采集：{session_dir.name}\n完整路径见退出终端，详情见eeg_error与eeg_health文件。', allow_abort=False)
+                    self._show_text(failure_message(self._eeg_failure)+f'\n\n已保存本次采集：{session_dir.name}\n完整路径见退出终端，详情见eeg_error与eeg_health文件。\n{bids_message}', allow_abort=False)
                 else:
-                    self._show_text(f"数据已保存：\n{session_dir}\n\n按空格键退出。", allow_abort=False)
+                    self._show_text(f"原始数据已保存：\n{session_dir}\n\n{bids_message}\n\n按空格键退出。", allow_abort=False)
 
     def _show_instructions(self) -> None:
         self._show_text(build_participant_instruction_text(

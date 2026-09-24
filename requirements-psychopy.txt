@@ -4,6 +4,7 @@ pylsl
 pyserial
 pyyaml
 zeroconf
+websocket-client>=1.8
 
 # Only required for BrainCo direct-SDK mode. BCIGo mode does not need it.
 # bcigo-sdk>=1.0.2

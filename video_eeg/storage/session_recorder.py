@@ -41,8 +41,11 @@ class SessionRecorder:
         self._n_channels = int(n_channels)
         self._event_only = bool(event_only)
         self._chunks: list[np.ndarray] = []
+        self._timestamp_chunks: list[np.ndarray] = []
         self._spool_path: Path | None = None
         self._spool_handle: Any | None = None
+        self._timestamp_spool_path: Path | None = None
+        self._timestamp_spool_handle: Any | None = None
         self._last_spool_flush = time.monotonic()
         self._spool_flush_interval_sec = 1.0
         self._part_index = 0
@@ -92,22 +95,33 @@ class SessionRecorder:
     def pull(self) -> np.ndarray:
         if self._event_only:
             return np.empty((self._n_channels, 0), dtype=np.float32)
-        samples, _timestamps = self._acquirer.get_new_samples()
+        samples, timestamps = self._acquirer.get_new_samples()
         if samples.size == 0:
             return np.empty((self._n_channels, 0), dtype=np.float32)
         if samples.ndim != 2 or samples.shape[0] < self._n_channels:
             raise RuntimeError(f"Unexpected incremental EEG shape: {samples.shape}")
         eeg = np.asarray(samples[: self._n_channels], dtype=np.float32)
+        sample_timestamps = np.asarray(timestamps, dtype=np.float64)
+        if sample_timestamps.ndim != 1 or sample_timestamps.shape[0] != eeg.shape[1]:
+            raise RuntimeError(
+                "EEG timestamp count does not match sample count: "
+                f"timestamps={sample_timestamps.shape}, samples={eeg.shape}"
+            )
+        if not np.all(np.isfinite(sample_timestamps)):
+            raise RuntimeError("EEG timestamps contain a non-finite value")
         with self._write_lock:
             if self._frozen:return np.empty((self._n_channels,0),dtype=np.float32)
             if self._spool_handle is not None:
                 np.ascontiguousarray(eeg.T).tofile(self._spool_handle)
+                assert self._timestamp_spool_handle is not None
+                sample_timestamps.tofile(self._timestamp_spool_handle)
                 now = time.monotonic()
                 if now - self._last_spool_flush >= self._spool_flush_interval_sec:
                     self._spool_handle.flush()
                     self._last_spool_flush = now
             else:
                 self._chunks.append(eeg.copy())
+                self._timestamp_chunks.append(sample_timestamps.copy())
             self._sample_count += int(eeg.shape[1])
         return eeg
 
@@ -129,10 +143,14 @@ class SessionRecorder:
             return
         if self._part_index == 1:
             spool_name = ".continuous_eeg.f32.tmp"
+            timestamp_spool_name = ".continuous_timestamps.f64.tmp"
         else:
             spool_name = f".continuous_eeg_part_{self._part_index:03d}.f32.tmp"
+            timestamp_spool_name = f".continuous_timestamps_part_{self._part_index:03d}.f64.tmp"
         self._spool_path = output_dir / spool_name
         self._spool_handle = self._spool_path.open("xb")
+        self._timestamp_spool_path = output_dir / timestamp_spool_name
+        self._timestamp_spool_handle = self._timestamp_spool_path.open("xb")
         self._last_spool_flush = time.monotonic()
 
     def add_event(self, name: str, **payload: Any) -> None:
@@ -158,6 +176,16 @@ class SessionRecorder:
             self._spool_handle.flush()
             self._spool_handle.close()
             self._spool_handle = None
+        if self._timestamp_spool_handle is not None:
+            self._timestamp_spool_handle.flush()
+            self._timestamp_spool_handle.close()
+            self._timestamp_spool_handle = None
+        timestamps_filename = (
+            "continuous_timestamps.npy"
+            if self._part_index == 1
+            else f"continuous_timestamps_part_{self._part_index:03d}.npy"
+        )
+        timestamps_path = output_dir / timestamps_filename if not self._event_only else None
         eeg_path = output_dir / self._eeg_filename if self._eeg_filename else None
         if self._event_only:
             pass
@@ -184,15 +212,39 @@ class SessionRecorder:
             # recovery instead of deleting either copy.
             os.rename(writing_path, eeg_path)
             self._spool_path.unlink()
+            if self._timestamp_spool_path is None or not self._timestamp_spool_path.exists():
+                raise RuntimeError("EEG timestamp spool is missing")
+            timestamp_values = np.fromfile(self._timestamp_spool_path, dtype=np.float64)
+            if timestamp_values.shape != (self._sample_count,):
+                raise RuntimeError(
+                    f"EEG timestamp spool count mismatch: {timestamp_values.shape} != {(self._sample_count,)}"
+                )
+            assert timestamps_path is not None
+            with timestamps_path.open("xb") as handle:
+                np.save(handle, timestamp_values)
+            self._timestamp_spool_path.unlink()
         elif self._spool_path is not None and self._spool_path.exists():
             assert eeg_path is not None
             with eeg_path.open("xb") as handle:
                 np.save(handle, np.empty((self._n_channels, 0), dtype=np.float32))
             self._spool_path.unlink()
+            assert timestamps_path is not None
+            with timestamps_path.open("xb") as handle:
+                np.save(handle, np.empty(0, dtype=np.float64))
+            if self._timestamp_spool_path is not None:
+                self._timestamp_spool_path.unlink()
         else:
             assert eeg_path is not None
             with eeg_path.open("xb") as handle:
                 np.save(handle, self.to_array())
+            assert timestamps_path is not None
+            with timestamps_path.open("xb") as handle:
+                np.save(
+                    handle,
+                    np.concatenate(self._timestamp_chunks)
+                    if self._timestamp_chunks
+                    else np.empty(0, dtype=np.float64),
+                )
         with (output_dir / self._events_filename).open("x", encoding="utf-8") as handle:
             json.dump([asdict(event) for event in self._events], handle, ensure_ascii=False, indent=2)
         segment_metadata = dict(metadata)
@@ -203,6 +255,7 @@ class SessionRecorder:
                 "events_file": self._events_filename,
                 "metadata_file": self._metadata_filename,
                 "sample_count": self._sample_count,
+                "timestamps_file": timestamps_filename if not self._event_only else None,
                 "sample_index_origin": (
                     (
                         "not_applicable_behavior_only"
@@ -282,6 +335,7 @@ class SessionRecorder:
                 "events_file": self._events_filename,
                 "metadata_file": self._metadata_filename,
                 "sample_count": self._sample_count,
+                "timestamps_file": metadata.get("timestamps_file"),
                 "sfreq": self._sfreq,
                 "n_channels": self._n_channels,
                 "start_trial": metadata.get("segment_start_trial"),

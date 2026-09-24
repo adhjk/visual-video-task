@@ -251,9 +251,21 @@ class EegSessionManager:
                     ),
                 }
             )
+        channel_names = getattr(self._acquirer.metadata, "channel_names", None)
+        auxiliary_channel_names = getattr(
+            self._acquirer.metadata, "auxiliary_channel_names", None
+        )
+        if channel_names is not None:
+            export_metadata["channel_names"] = list(channel_names)
+        if auxiliary_channel_names is not None:
+            export_metadata["auxiliary_channel_names"] = list(
+                auxiliary_channel_names
+            )
         export_metadata.update(self._start_metadata)
         if metadata:
             export_metadata.update(metadata)
+        if hasattr(self._acquirer, "runtime_metadata"):
+            export_metadata["emotiv_runtime"] = self._acquirer.runtime_metadata
         if self._background_error is not None:
             export_metadata["termination_reason"] = "eeg_background_error"
             export_metadata["background_error"] = repr(self._background_error)

@@ -52,10 +52,12 @@ def register_default_acquirers() -> None:
     from video_eeg.devices.external_recorder_acquirer import ExternalRecorderAcquirer
     from video_eeg.devices.lsl_acquirer import LSLAcquirer
     from video_eeg.devices.neuracle_acquirer import NeuracleAcquirer
+    from video_eeg.devices.emotiv import EmotivAcquirer
 
     AcquirerFactory.register("brainco", BrainCoAcquirer)
     AcquirerFactory.register("brainco_bcigo", ExternalRecorderAcquirer)
     AcquirerFactory.register("brainco_lsl", LSLAcquirer)
     AcquirerFactory.register("dummy", DummyAcquirer) #added
     AcquirerFactory.register("neuracle", NeuracleAcquirer)
+    AcquirerFactory.register("emotiv", EmotivAcquirer)
 

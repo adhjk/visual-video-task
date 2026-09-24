@@ -559,7 +559,13 @@ def build_acquirer(*, device_name: str, config: dict[str, Any]) -> Any:
         "buffer_sec": float(config.get("buffer_sec", 180.0)),
     }
     factory_name = selected
-    if selected == "neuracle":
+    if selected == "emotiv":
+        kwargs = {
+            "emotiv_config": device_cfg.get("emotiv", {}),
+            "project_dir": str(PROJECT_ROOT),
+            "buffer_sec": float(config.get("buffer_sec", 180.0)),
+        }
+    elif selected == "neuracle":
         kwargs.update(
             {
                 "eeg_channel_count": neuracle_eeg_channels,
@@ -604,7 +610,7 @@ def build_acquirer(*, device_name: str, config: dict[str, Any]) -> Any:
     return AcquirerFactory.create(factory_name, **kwargs)
 
 
-def build_marker_backend(config: dict[str, Any]) -> Any:
+def build_marker_backend(config: dict[str, Any], *, acquirer: Any | None = None) -> Any:
     from video_eeg.utils.markers import (
         CompositeMarkerBackend,
         LSLMarkerBackend,
@@ -613,6 +619,11 @@ def build_marker_backend(config: dict[str, Any]) -> Any:
     )
 
     device_cfg = dict(config.get("device", {}))
+    selected = str(config.get("device_type", "")).strip().lower()
+    if selected == "emotiv":
+        if acquirer is None or not hasattr(acquirer, "marker_backend"):
+            raise RuntimeError("EMOTIV marker backend requires its active EmotivAcquirer")
+        return acquirer.marker_backend()
     backends: list[Any] = []
     serial_port = str(device_cfg.get("trigger_serial_port", "")).strip()
     if serial_port:
@@ -671,6 +682,8 @@ def _marker_mode(backend: Any) -> str:
         return "lsl"
     if type(backend).__name__ == "CompositeMarkerBackend":
         return "lsl" if hasattr(backend, "wait_for_consumers") else "trigger_box"
+    if type(backend).__name__ == "EmotivCortexMarkerBackend":
+        return "emotiv_cortex"
     return "trigger_box"
 
 
@@ -688,7 +701,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-dialog", action="store_true", help="跳过 PsychoPy 启动对话框。")
     parser.add_argument("--dummy-eeg", action="store_true", help="强制使用模拟 EEG。")
     parser.add_argument("--real-eeg", action="store_true", help="强制使用真实 EEG 配置。")
-    parser.add_argument("--device-type", choices=["brainco", "neuracle"], default="")
+    parser.add_argument("--device-type", choices=["brainco", "neuracle", "emotiv"], default="")
     parser.add_argument("--brainco-transport", choices=["bcigo", "lsl", "sdk"], default="")
     parser.add_argument("--preflight-eeg", action="store_true", help="打开窗口前检查 EEG/Marker 连接。")
     parser.add_argument("--eeg-check-only", action="store_true", help="只检查 EEG/Marker 连接。")
@@ -1405,14 +1418,19 @@ class VideoRunner:
             device_name=str(self.config.get("device_type", "brainco")),
             config=self.config,
         )
-        marker_backend = build_marker_backend(self.config)
+        marker_backend = build_marker_backend(self.config, acquirer=acquirer)
         records_dir = self.project_dir / Path(
             str(self.config.get("storage", {}).get("records_dir", "video_records_storage"))
         )
         self.manager = EegSessionManager(
             acquirer,
             marker_backend,
-            sfreq=expected_sampling_rate(self.config),
+            sfreq=(
+                float(acquirer.metadata.sfreq)
+                if str(self.config.get("device_type", "")).strip().lower() == "emotiv"
+                and self.config.get("device", {}).get("emotiv", {}).get("validation", {}).get("expected_sfreq") is None
+                else expected_sampling_rate(self.config)
+            ),
             records_dir=records_dir,
             subject_id=str(self.config.get("subject_id", "S001")),
             session_id=int(self.config.get("session_id", 1)),
@@ -1445,7 +1463,16 @@ class VideoRunner:
                 "eeg_mode": "dummy" if bool(self.config.get("hardware_dummy_mode", False)) else "real",
                 "marker_mode": _marker_mode(marker_backend),
                 "eeg_connection_check": connection,
-                "expected_sampling_rate_hz": expected_sampling_rate(self.config),
+                "expected_sampling_rate_hz": (
+                    self.config.get("device", {}).get("emotiv", {}).get("validation", {}).get("expected_sfreq")
+                    if str(self.config.get("device_type", "")).strip().lower() == "emotiv"
+                    else expected_sampling_rate(self.config)
+                ),
+                "emotiv_runtime": (
+                    acquirer.runtime_metadata
+                    if str(self.config.get("device_type", "")).strip().lower() == "emotiv"
+                    else None
+                ),
                 "eeg_recording_mode": (
                     "bcigo_external_edf"
                     if uses_bcigo_external_recording(self.config)
@@ -2343,7 +2370,11 @@ def probe_eeg_connection(config: dict[str, Any]) -> dict[str, Any]:
             "device": acquirer.metadata.name,
             "channels": int(acquirer.metadata.n_channels),
             "sfreq": float(acquirer.metadata.sfreq),
-            "expected_sampling_rate_hz": expected_sampling_rate(config),
+            "expected_sampling_rate_hz": (
+                config.get("device", {}).get("emotiv", {}).get("validation", {}).get("expected_sfreq")
+                if str(config.get("device_type", "")).strip().lower() == "emotiv"
+                else expected_sampling_rate(config)
+            ),
             "samples": int(samples.shape[1]),
             "recording_mode": "local_continuous_eeg",
         }

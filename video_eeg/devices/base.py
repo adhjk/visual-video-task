@@ -21,6 +21,8 @@ class AcquirerMetadata:
     eeg_channel_count: int | None = None
     trigger_channel_index: int | None = None
     trigger_channel_name: str | None = None
+    channel_names: tuple[str, ...] | None = None
+    auxiliary_channel_names: tuple[str, ...] | None = None
 
 
 class AbstractAcquirer(ABC):
